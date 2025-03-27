@@ -32,37 +32,29 @@ class MwebClient {
         }
     }
     
-    /// Get unspent MWEB outputs (UTXOs) for an account
+    /// Stream unspent MWEB outputs (UTXOs) for an account
     /// - Parameters:
     ///   - fromHeight: Block height from which to start fetching UTXOs
     ///   - scanSecret: Scan secret or view key for the account
-    /// - Returns: Array of UTXOs
-    func getUtxos(fromHeight: Int32, scanSecret: Data) async throws -> [Utxo] {
+    ///   - onReceive: Closure that will be called for each UTXO as it arrives
+    func streamUtxos(fromHeight: Int32, scanSecret: Data, onReceive: @escaping (Utxo) -> Void) async throws {
         let transportSecurity: GRPCNIOTransportCore.HTTP2ClientTransport.Posix.TransportSecurity = useTLS ? .tls : .plaintext
         
-        return try await withGRPCClient(
+        try await withGRPCClient(
             transport: .http2NIOPosix(
                 target: .ipv4(host: host, port: port),
                 transportSecurity: transportSecurity
             )
         ) { client in
-            _ = Rpc.Client(wrapping: client)
+            let rpcClient = Rpc.Client(wrapping: client)
             var request = UtxosRequest()
             request.fromHeight = fromHeight
             request.scanSecret = scanSecret
             
-            return try await client.serverStreaming(
-                request: ClientRequest(message: request),
-                descriptor: Rpc.Method.Utxos.descriptor,
-                serializer: GRPCProtobuf.ProtobufSerializer<UtxosRequest>(),
-                deserializer: GRPCProtobuf.ProtobufDeserializer<Utxo>(),
-                options: .defaults
-            ) { response in
-                var utxoCollection = [Utxo]()
+            try await rpcClient.utxos(request: ClientRequest(message: request)) { response in
                 for try await utxo in response.messages {
-                    utxoCollection.append(utxo)
+                    onReceive(utxo)
                 }
-                return utxoCollection
             }
         }
     }
