@@ -13,10 +13,11 @@ struct ContentView: View {
     @State private var generatedAddresses: [String] = []
     @State private var utxos: [Utxo] = []
     @State private var isLoadingUtxos = false
-    private var port: Int?
-    
     @State private var showingAlert = false
     @State private var statusMessage = ""
+    @State private var isAddressesSectionExpanded = false
+    @State private var navigateToCreateTransaction = false
+    private var port: Int?
     
     var walletMnemonic: [String]
     init(walletMnemonic: [String] = []) {
@@ -24,108 +25,246 @@ struct ContentView: View {
     }
     
     var body: some View {
-        VStack {
-            Button(action: {
-                DispatchQueue.global(qos: .background).async {
-                    startMwebd()
-                }
-            }) {
-                Text("Start Mwebd")
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-            }
-            
-            Button(action: generateAddresses) {
-                Text("Generate Addresses")
-                    .padding()
-                    .background(Color.green)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-            }
-            
-            if let errorMessage = errorMessage {
-                Text("Error: \(errorMessage)")
-                    .foregroundColor(.red)
-                    .padding()
-            }
-            
-            // Toggle between addresses and UTXOs based on what's available
-            if !utxos.isEmpty {
-                Text("MWEB UTXOs").font(.headline).padding(.top)
-                
-                // UTXO balance summary
-                VStack(spacing: 4) {
-                    Text("Total: \(formatAmount(totalBalance))")
-                        .fontWeight(.bold)
+        ScrollView {
+            VStack(spacing: 16) {
+                // Buttons section
+                HStack(spacing: 12) {
+                    Button(action: {
+                        DispatchQueue.global(qos: .background).async {
+                            startMwebd()
+                        }
+                    }) {
+                        Text("Start Mwebd")
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
                     
-                    HStack(spacing: 16) {
-                        Text("Confirmed: \(formatAmount(confirmedBalance))")
-                            .font(.footnote)
-                        Text("Unconfirmed: \(formatAmount(unconfirmedBalance))")
-                            .font(.footnote)
+                    Button(action: generateAddresses) {
+                        Text("Generate Addresses")
+                            .padding()
+                            .background(Color.green)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
                     }
                 }
-                .padding(.bottom, 8)
                 
-                List {
-                    ForEach(utxos, id: \.outputID) { utxo in
-                        UtxoListItem(utxo: utxo)
-                    }
+                if let errorMessage = errorMessage {
+                    Text("Error: \(errorMessage)")
+                        .foregroundColor(.red)
+                        .padding()
                 }
-                .listStyle(PlainListStyle())
-                .environment(\.defaultMinListRowHeight, 80)
-            } else if !generatedAddresses.isEmpty {
-                Text("MWEB Addresses").font(.headline).padding(.top)
                 
-                List {
-                    ForEach(generatedAddresses, id: \.self) { address in
-                       AddressListItem(address: address)
+                // UTXOs Section - Always show if there are UTXOs
+                if !utxos.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                        Text("MWEB UTXOs")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        
+                        Spacer()
+                        
+                        Text("\(utxos.count)")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(8)
+                    }
+                    .padding(.top)
+                    
+                    // UTXO balance summary
+                    VStack(spacing: 12) {
+                        // Total balance with gradient background
+                        VStack(spacing: 4) {
+                            Text("Total Balance")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            
+                            Text(formatAmount(totalBalance))
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.blue, Color.purple]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .cornerRadius(10)
+                        
+                        // Confirmed and Unconfirmed in two cards side by side
+                        HStack(spacing: 12) {
+                            // Confirmed Balance
+                            VStack(spacing: 4) {
+                                Text("Confirmed")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Text(formatAmount(confirmedBalance))
+                                    .font(.callout)
+                                    .fontWeight(.semibold)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(Color.green.opacity(0.15))
+                            .cornerRadius(8)
+                            
+                            // Unconfirmed Balance
+                            VStack(spacing: 4) {
+                                Text("Unconfirmed")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Text(formatAmount(unconfirmedBalance))
+                                    .font(.callout)
+                                    .fontWeight(.semibold)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(Color.orange.opacity(0.15))
+                            .cornerRadius(8)
+                        }
+                    }
+                    .padding(.vertical, 12)
+                        
+                        // UTXO list
+                        VStack {
+                            ForEach(utxos, id: \.outputID) { utxo in
+                                UtxoListItem(utxo: utxo)
+                                Divider()
+                            }
+                        }
+                        .padding(.vertical, 8)
+                    }
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(10)
+                    .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+                }
+                
+                // Addresses Section - Always visible with collapsible content
+                VStack(alignment: .leading, spacing: 8) {
+                    // Collapsible header
+                    Button(action: {
+                        withAnimation {
+                            isAddressesSectionExpanded.toggle()
+                        }
+                    }) {
+                        HStack {
+                            Text("MWEB Addresses")
+                                .font(.headline)
+                            
+                            Spacer()
+                            
+                            Image(systemName: isAddressesSectionExpanded ? "chevron.up" : "chevron.down")
+                                .foregroundColor(.blue)
+                        }
+                        .padding(.vertical, 8)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Collapsible content
+                    if isAddressesSectionExpanded {
+                        if generatedAddresses.isEmpty {
+                            Text("No addresses available. Click 'Generate Addresses' button to create new addresses.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding()
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(8)
+                        } else {
+                            VStack(spacing: 0) {
+                                ForEach(generatedAddresses, id: \.self) { address in
+                                    AddressListItem(address: address)
+                                    Divider()
+                                }
+                            }
+                            .padding(.vertical, 8)
+                        }
                     }
                 }
-                .listStyle(PlainListStyle())
-                .environment(\.defaultMinListRowHeight, 44)
-            }
-            
-            HStack(spacing: 20) {
-                Button(action: {
-                    Task {
-                        let status = await getStatus()
-                        statusMessage =  "Block Height: " + String(status.blockHeaderHeight) + "\nMwebHeader Height: " + String(status.mwebHeaderHeight) + "\nMwebUtxo Height: " + String(status.mwebUtxosHeight)
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(10)
+                .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+                
+                // Action buttons
+                HStack(spacing: 20) {
+                    Button(action: {
+                        Task {
+                            let status = await getStatus()
+                            statusMessage =  "Block Height: " + String(status.blockHeaderHeight) + "\nMwebHeader Height: " + String(status.mwebHeaderHeight) + "\nMwebUtxo Height: " + String(status.mwebUtxosHeight)
+                        }
+                        showingAlert = true
+                    }) {
+                        Text("Get Status")
+                            .padding()
+                            .background(Color.green)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }.alert(statusMessage, isPresented: $showingAlert) {
+                        Button("OK", role: .cancel) { }
                     }
-                    showingAlert = true
-                }) {
-                    Text("Get Status")
+                    
+                    Button(action: {
+                        Task {
+                            await streamUtxos()
+                        }
+                    }) {
+                        HStack {
+                            Text("Stream Utxos")
+                            if isLoadingUtxos {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(0.7)
+                            }
+                        }
                         .padding()
                         .background(Color.green)
                         .foregroundColor(.white)
                         .cornerRadius(10)
-                }.alert(statusMessage, isPresented: $showingAlert) {
-                    Button("OK", role: .cancel) { }
-                }
-                
-                Button(action: {
-                    Task {
-                        await streamUtxos()
                     }
-                }) {
-                    HStack {
-                        Text("Stream Utxos")
-                        if isLoadingUtxos {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .scaleEffect(0.7)
+                    .disabled(isLoadingUtxos)
+                    
+                    
+                    NavigationLink(
+                        destination: CreateTransactionView(
+                            scanKey: scanKey,
+                            spendKey: spendKey,
+                            utxos: utxos
+                        ),
+                        isActive: $navigateToCreateTransaction
+                    ) {
+                        Button(action: {
+                            navigateToCreateTransaction = true
+                        }) {
+                            Text("Create Transaction")
+                                .padding()
+                                .background(Color.purple)
+                                .foregroundColor(.white)
+                                .cornerRadius(10)
                         }
+                        .disabled(utxos.isEmpty || scanKey == nil || spendKey == nil)
                     }
-                    .padding()
-                    .background(Color.green)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
                 }
-                .disabled(isLoadingUtxos)
+                .padding(.top)
             }
-            .padding(.top)
+            .padding()
+        }
+        .navigationTitle("MWEB Wallet")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            // Auto-expand the addresses section on first load if there are addresses
+            isAddressesSectionExpanded = !generatedAddresses.isEmpty
         }
     }
     
@@ -148,6 +287,9 @@ struct ContentView: View {
         return String(format: "%.8f LTC", ltcValue)
     }
     
+    
+/// startMwebd() creates a grpc server in the background.
+/// user specifies arguements
     func startMwebd() {
         DispatchQueue.global(qos: .background).async {
             stopServer()
@@ -155,6 +297,7 @@ struct ContentView: View {
             let args = MwebdServerArgs()
             args.chain = "mainnet"
             args.dataDir = getDocumentsDirectory().path
+            // peer must support NODE_MWEB_LIGHT_CLIENT
             args.peerAddr = "88.198.50.4:9333"
             args.proxyAddr = ""
             
@@ -183,6 +326,14 @@ struct ContentView: View {
         server?.stop()
     }
     
+/// generateWallet() creates a random HD wallet
+///
+/// When integrating MWEBD into your own application, generate scanKeys and
+/// spendKeys from the same non-MWEB mnemonic
+/// scanKeys must be derived with path: m/1000'/2'/0'/0'
+/// spendKeys must be derived with path: m/1000'/2'/0'/1'
+///
+/// NOTE: example code below uses the incorrect derivation paths!
     func generateWallet() {
         guard !walletMnemonic.isEmpty else {
             DispatchQueue.main.async {
@@ -209,8 +360,6 @@ struct ContentView: View {
                                    network: network,
                                    account: UInt32(account))
         
-        print("finished wallet")
-        
         let scan = wallet.privKey(index: 0, chain: .external)
         let spend = wallet.privKey(index: 1, chain: .external)
         
@@ -222,6 +371,7 @@ struct ContentView: View {
         }
     }
     
+/// generateAddresses() uses a scanKey & spendKey to generate many addresses
     func generateAddresses() {
         generateWallet()
         print("generated wallet")
@@ -245,9 +395,16 @@ struct ContentView: View {
         DispatchQueue.main.async {
             generatedAddresses = addressArray
             errorMessage = nil // Clear any previous errors
+            
+            isAddressesSectionExpanded = true
         }
     }
     
+/// getStatus() responds with current MWEBD blockchain state
+///
+/// Use to check if the wallet is synced and ready to send funds
+/// Compare with another source of current tip height to calculate sync %
+/// MWEB utxo height must match tip block header height for completed sync
     func getStatus() async -> StatusResponse {
         let client = MwebClient(host: "127.0.0.1", port: 9332)
         
@@ -261,6 +418,9 @@ struct ContentView: View {
         }
     }
     
+/// streamUtxos() is a grpc stream which scans for new utxos to the wallet
+///
+/// stream should ideally be opened and kept open after mwebd grpc server is started
     func streamUtxos() async {
         let client = MwebClient(host: "127.0.0.1", port: 9332)
         
