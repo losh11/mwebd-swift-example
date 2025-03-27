@@ -46,7 +46,7 @@ class MwebClient {
                 transportSecurity: transportSecurity
             )
         ) { client in
-            let rpcClient = Rpc.Client(wrapping: client)
+            _ = Rpc.Client(wrapping: client)
             var request = UtxosRequest()
             request.fromHeight = fromHeight
             request.scanSecret = scanSecret
